@@ -3,5 +3,5 @@
 /.lein-*
 /.nrepl-port
 .idea
-reptile-server.iml
+reptile-lib.iml
 .cpcache
