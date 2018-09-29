@@ -3,12 +3,13 @@
             [compojure.core :refer [defroutes GET POST]]
             [compojure.route :as route]
             [clojure.core.async :refer [<! <!! >! >!! put! chan go go-loop]]
+            [aleph.http :as aleph]
             [taoensso.encore :refer [have have?]]
             [taoensso.timbre :refer [tracef debugf infof warnf errorf]]
-            [taoensso.sente :as sente]
-            [aleph.http :as aleph]
             [taoensso.sente.server-adapters.aleph :refer [get-sch-adapter]]
             [taoensso.sente.packers.transit :as sente-transit]
+            [taoensso.sente :as sente]
+            [complete.core :as completer]
             [reptile.server.socket-repl :as repl]))
 
 ;; (timbre/set-level! :trace) ; Uncomment for more logging
@@ -116,9 +117,9 @@
 (defn- register-uid [state uid send-fn]
   (assoc-in state [:clients uid :send-fn] (partial send-fn uid)))
 
-(defn- register-user [state user client-id]
+(defn- register-user [state user client-id observer]
   (let [kw-user (keyword user)]
-    (assoc-in state [:reptile :clients kw-user :client-id] client-id)))
+    (assoc-in state [:reptile :clients kw-user] {:client-id client-id :observer observer})))
 
 (defn- deregister-user [state user]
   (let [kw-user (keyword user)]
@@ -127,11 +128,20 @@
 (def ^:private shared-secret (atom nil))
 
 (defn- auth [{:keys [client-id ?data ?reply-fn state]}]
-  (let [{:keys [user secret]} ?data]
-    (if (= secret @shared-secret)
-      (do (swap! state register-user user client-id)
+  (let [{:keys [user secret observer]} ?data
+        editor? (= "false" observer)]
+    (cond
+      (and editor? (= secret @shared-secret))
+      (do (swap! state register-user user client-id observer)
           (?reply-fn :login-ok))
-      (?reply-fn :login-failed))))
+
+      editor?
+      (?reply-fn :login-failed)
+
+      :else
+      (do
+        (swap! state register-user user client-id observer)
+        (?reply-fn :login-ok)))))
 
 (defmethod ^:private -event-msg-handler :reptile/login
   [ev-msg]
