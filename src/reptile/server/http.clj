@@ -66,6 +66,7 @@
   ;; Send the keystrokes to one and all
   [{:keys [?data]}]
   (let [shared-data {:form (:form ?data) :user (:user-name ?data)}]
+    (debugf ":reptile/keystrokes - shared-data %s" shared-data)
     (doseq [uid (:any @connected-uids)]
       (chsk-send! uid [:fast-push/keystrokes shared-data]))))
 
@@ -80,8 +81,6 @@
     (let [input-form (:form ?data)
           response   {:prepl-response (repl/shared-eval prepl input-form)}]
 
-      (println ":reptile/repl - response" response)
-
       ;; Send the results to everyone
       (doseq [uid (:any @connected-uids)]
         (chsk-send! uid [:fast-push/eval (merge ?data response)])))))
@@ -94,7 +93,7 @@
 ;;;;;;;;;;; LOGIN
 
 ;; The standard Sente approach uses Ring to authenticate but we want to use WS
-(def ^:private connected-users (atom {:editors     ["eric" "mia" "mike" "ray"]
+(def ^:private connected-users (atom {:editors     ["eric" "mia" "mike" "ray" "reid"]
                                       :session-key "apropos"}))
 
 ;; We can watch this atom for changes if we like
@@ -111,6 +110,7 @@
                      prev-users (get-in old [:reptile :clients])]
                  (println "Current users" curr-users)
                  (println "Previous users" prev-users)
+                 (println "Connected UIDs" @connected-uids)
                  (doseq [uid (:any @connected-uids)]
                    (chsk-send! uid [:fast-push/editors curr-users]))))))
 
@@ -119,7 +119,8 @@
 
 (defn- register-user [state user client-id observer]
   (let [kw-user (keyword user)]
-    (assoc-in state [:reptile :clients kw-user] {:client-id client-id :observer observer})))
+    (assoc-in state [:reptile :clients kw-user]
+              {:client-id client-id :observer observer})))
 
 (defn- deregister-user [state user]
   (let [kw-user (keyword user)]
