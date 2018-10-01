@@ -1,8 +1,7 @@
 (ns reptile.server.socket-repl
   (:require [clojure.java.io :as io]
-            [clojure.tools.reader.reader-types :as reader-types]
             [clojure.core.server :as clj-server]
-            [clojure.tools.reader.edn :as edn-reader]
+            [clojure.tools.reader.reader-types :as reader-types]
             [clojure.tools.reader :as reader])
   (:import (java.net Socket ServerSocket)
            (java.io OutputStreamWriter)
@@ -24,37 +23,30 @@
         server-writer (OutputStreamWriter. (io/output-stream client))]
     [server-reader server-writer]))
 
-(defn read-ex
-  "Read exceptions, patching spec SNAFUs"
-  [exc]
-  (try (some-> exc
-               (clojure.string/replace #"^#error " "")
-               (clojure.string/replace #":spec #object.+ :value" ":value")
-               (edn-reader/read-string))
-       (catch Exception e (str "unparseable error from spec:" (.getMessage e)))))
-
 
 ; TODO use spec to verify the :reader / :writer keys are present on the passed repl
 (defn process-form
   "Check the validity of the form and evaluate it using the given `repl`"
   [repl form]
   (try
-    (let [eval-ok!     (eval (read-string form))
-          sentinel     ::eof
-          prepl-reader (partial reader/read {:eof sentinel} (:reader repl))
-          edn-form     (read-string form)]
-      (send-code (:writer repl) edn-form)
+    (let [eval-ok! (eval (read-string form))
+          edn-form (read-string form)]
+      (send-code (:writer repl) edn-form))
 
-      (if-let [result (prepl-reader)]
-        (if (= result sentinel)
-          {:tag :err :form form :ms 0 :ns "user" :val "" :err-source :process-form}
-          (loop [results [result]]
-            (if (= :ret (:tag (last results)))
-              results
-              (recur (conj results (prepl-reader))))))
-        {:tag :err :form form :ms 0 :ns "user" :val (str "Shared-eval - no results. Input form: " form)}))
+    (let [sentinel     ::eof
+          prepl-reader (partial reader/read {:eof sentinel} (:reader repl))]
+      (loop [results [(prepl-reader)]]
+        (cond
+          (= sentinel (last results))
+          {:tag :err :form form :ms 0 :ns "user" :val "" :err-source :process-form-reader}
 
-    (catch Exception e {:tag :err :err-source :process-form
+          (= :ret (:tag (last results)))
+          results
+
+          :else
+          (recur (conj results (prepl-reader))))))
+
+    (catch Exception e {:tag  :err :err-source :process-form
                         :form form :ms 0 :ns "user" :val (pr-str (.getCause e))})))
 
 (defn read-forms

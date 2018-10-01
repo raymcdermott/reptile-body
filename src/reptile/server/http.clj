@@ -66,7 +66,6 @@
   ;; Send the keystrokes to one and all
   [{:keys [?data]}]
   (let [shared-data {:form (:form ?data) :user (:user-name ?data)}]
-    (debugf ":reptile/keystrokes - shared-data %s" shared-data)
     (doseq [uid (:any @connected-uids)]
       (chsk-send! uid [:fast-push/keystrokes shared-data]))))
 
