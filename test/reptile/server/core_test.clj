@@ -167,9 +167,21 @@
         (is (nil? (read-string (:val (first gen-ok)))))
         (is (int? (read-string (:val (last gen-ok)))))))))
 
+(defn normalise-exception-data
+  [exc]
+  (let [exc-data       (ex-data exc)
+        exc-msg        (ex-message exc)
+        cause          (ex-cause exc)
+        exc-cause-data (ex-data cause)
+        exc-cause-msg  (ex-message cause)]
+    {:exc-data       (pr-str exc-data)
+     :exc-msg        exc-msg
+     :exc-cause-data (pr-str exc-cause-data)
+     :exc-cause-msg  exc-cause-msg}))
+
 (deftest ^:graceful-fail-tests graceful-fail-tests
   (testing "Test graceful failures for syntax and spec errors"
-    (let [shared-eval  (evaller :comp-first? true)]
+    (let [shared-eval (evaller :comp-first? true)]
 
       (let [{:keys [err-source ex-data tag val]} (shared-eval "(")]
         (is (and (false? ex-data)
@@ -177,33 +189,23 @@
                  (= :read-forms err-source)))
         (is (= "EOF while reading" val)))
 
-      (let [{:keys [err-source exc-data exc-msg exc-cause-data exc-cause-msg tag val]}
-            (shared-eval "(defn x (+ 1 2))")]
-        (is (and exc-data exc-cause-data
-                 (= :err tag)
-                 (= :process-form err-source)))
+      (let [{:keys [tag val] :as x} (shared-eval "(defn x (+ 1 2))")
+            {:keys [cause via trace data]} (binding [*default-data-reader-fn* repl/default-reptile-tag-reader]
+                                             (read-string val))
+            problems      (:clojure.spec.alpha/problems data)
+            spec          (:clojure.spec.alpha/spec data)
+            value         (:clojure.spec.alpha/value data)
+            args          (:clojure.spec.alpha/args data)]
 
-        (is (empty? val))
+        (is (= (:ret tag)))
 
-        (is (str/starts-with? exc-msg "Syntax error macroexpanding"))
-        (is (str/ends-with? exc-cause-msg "did not conform to spec."))
-
-        (let [exc-data-map (read-string exc-data)]
-          (is (int? (:clojure.error/column exc-data-map)))
-          (is (int? (:clojure.error/line exc-data-map)))
-          (is (= (:clojure.error/phase exc-data-map) :macroexpand))
-          (is (= (:clojure.error/symbol exc-data-map) 'clojure.core/defn)))
-
-        (let [exc-cause-map (binding [*default-data-reader-fn* repl/default-reptile-tag-reader]
-                              (read-string exc-cause-data))
-              problems (:clojure.spec.alpha/problems exc-cause-map)
-              spec (:clojure.spec.alpha/spec exc-cause-map)
-              value (:clojure.spec.alpha/value exc-cause-map)
-              args (:clojure.spec.alpha/args exc-cause-map)]
-          (is (= 2 (count problems)))
-          (is (= 2 (count (keys spec))))
-          (is (= '(x (+ 1 2)) value))
-          (is (= '(x (+ 1 2)) args)))))))
+        (is (= cause "Call to clojure.core/defn did not conform to spec."))
+        (is (= 2 (count (filter :message via))))
+        (is (and (vector? trace) (> (count trace) 10)))
+        (is (= 2 (count problems)))
+        (is (= 2 (count (keys spec))))
+        (is (= '(x (+ 1 2)) value))
+        (is (= '(x (+ 1 2)) args))))))
 
 (deftest ^:in-namespaces in-namespaces
   (testing "Testing the support and use of namespaces"

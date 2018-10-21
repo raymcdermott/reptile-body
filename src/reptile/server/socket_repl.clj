@@ -39,11 +39,10 @@
      :exc-cause-data (pr-str exc-cause-data)
      :exc-cause-msg  exc-cause-msg}))
 
-(defn process-form
-  "Check the validity of the form and evaluate it using the given `repl`"
+(defn eval-form
+  "Evaluate it using the given `repl`"
   [repl form]
   (try
-    (eval form)                                             ; Catch any spec errors, PREPL does not - will hang
 
     (send-code (:writer repl) form)
 
@@ -96,12 +95,7 @@
   (let [expanded-forms (read-forms forms-str)]
     (if (map? expanded-forms)                               ; error map
       [expanded-forms]
-      (flatten (map (partial process-form repl) expanded-forms)))))
-
-(defn single-eval
-  "Evaluate `form-str` using the given `repl`"
-  [repl form-str]
-  (process-form repl form-str))
+      (flatten (map (partial eval-form repl) expanded-forms)))))
 
 (defn shared-prepl-server
   [opts]
