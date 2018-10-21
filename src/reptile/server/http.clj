@@ -32,6 +32,7 @@
 (defroutes ^:private ring-routes
            (GET "/chsk" ring-req (ring-ajax-get-or-ws-handshake ring-req))
            (POST "/chsk" ring-req (ring-ajax-post ring-req))
+           (route/files "/" {:root "resources/public"})
            (route/not-found "<h1>Page not found</h1>"))
 
 (def ^:private main-ring-handler
