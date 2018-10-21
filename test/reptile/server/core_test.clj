@@ -177,10 +177,17 @@
                  (= :read-forms err-source)))
         (is (= "EOF while reading" val)))
 
-      (let [{:keys [err-source exc-data exc-cause-data tag val]} (shared-eval "(defn x (+ 1 2))")]
+      (let [{:keys [err-source exc-data exc-msg exc-cause-data exc-cause-msg tag val]}
+            (shared-eval "(defn x (+ 1 2))")]
         (is (and exc-data exc-cause-data
                  (= :err tag)
                  (= :process-form err-source)))
+
+        (is (empty? val))
+
+        (is (str/starts-with? exc-msg "Syntax error macroexpanding"))
+        (is (str/ends-with? exc-cause-msg "did not conform to spec."))
+
         (let [exc-data-map (read-string exc-data)]
           (is (int? (:clojure.error/column exc-data-map)))
           (is (int? (:clojure.error/line exc-data-map)))

@@ -30,10 +30,10 @@
 (defn normalise-exception-data
   [exc]
   (let [exc-data       (ex-data exc)
-        exc-msg        (.getMessage exc)
-        cause          (.getCause exc)
+        exc-msg        (ex-message exc)
+        cause          (ex-cause exc)
         exc-cause-data (ex-data cause)
-        exc-cause-msg  (.getMessage cause)]
+        exc-cause-msg  (ex-message cause)]
     {:exc-data       (pr-str exc-data)
      :exc-msg        exc-msg
      :exc-cause-data (pr-str exc-cause-data)
