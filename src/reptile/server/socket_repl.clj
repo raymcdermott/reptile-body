@@ -1,10 +1,7 @@
 (ns reptile.server.socket-repl
   (:require
-    [clojure.spec.alpha :as s]
     [clojure.java.io :as io]
-    [clojure.core.server :as clj-server]
-    [clojure.tools.reader.edn :as edn]
-    [clojure.string :as str])
+    [clojure.core.server :as clj-server])
   (:import
     (java.net Socket ServerSocket)
     (java.io OutputStreamWriter StringReader PushbackReader)
@@ -28,8 +25,19 @@
 
 (defn default-reptile-tag-reader
   [tag val]
-  (println "default-reptile-tag-reader tag" tag "val" val)
   {:nk-tag tag :nk-val (read-string (str val))})
+
+(defn normalise-exception-data
+  [exc]
+  (let [exc-data       (ex-data exc)
+        exc-msg        (.getMessage exc)
+        cause          (.getCause exc)
+        exc-cause-data (ex-data cause)
+        exc-cause-msg  (.getMessage cause)]
+    {:exc-data       (pr-str exc-data)
+     :exc-msg        exc-msg
+     :exc-cause-data (pr-str exc-cause-data)
+     :exc-cause-msg  exc-cause-msg}))
 
 (defn process-form
   "Check the validity of the form and evaluate it using the given `repl`"
@@ -54,12 +62,10 @@
           :else
           (recur (conj results (prepl-reader))))))
 
-    ; TODO find a way to look up specs and obtain explain-data
     (catch Exception e
-      (let [msg-data   (ex-data e)
-            msg-string (.getMessage e)]
-        {:tag :err :form form :ms 0 :ns "user" :ex-data (map? msg-data)
-         :val (if msg-data (pr-str msg-data) msg-string) :err-source :process-form}))))
+      (let [exc-data (normalise-exception-data e)]
+        (merge exc-data
+               {:tag :err :form form :ms 0 :ns "user" :val "" :err-source :process-form})))))
 
 (defn read-forms
   "Read the string in the REPL buffer to obtain all forms (rather than just the first)"

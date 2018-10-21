@@ -1,7 +1,7 @@
 (ns reptile.server.core-test
   (:require [clojure.test :refer :all]
-            [clojure.string :as string]
             [clojure.string :as str]
+            [clojure.tools.reader :as reader]
             [reptile.server.http :refer :all]
             [reptile.server.socket-repl :as repl]))
 
@@ -169,7 +169,7 @@
 
 (deftest ^:graceful-fail-tests graceful-fail-tests
   (testing "Test graceful failures for syntax and spec errors"
-    (let [shared-eval (evaller :comp-first? true)]
+    (let [shared-eval  (evaller :comp-first? true)]
 
       (let [{:keys [err-source ex-data tag val]} (shared-eval "(")]
         (is (and (false? ex-data)
@@ -177,15 +177,26 @@
                  (= :read-forms err-source)))
         (is (= "EOF while reading" val)))
 
-      (let [{:keys [err-source ex-data tag val] :as x} (shared-eval "(defn x (+ 1 2))")]
-        (is (and (true? ex-data)
+      (let [{:keys [err-source exc-data exc-cause-data tag val]} (shared-eval "(defn x (+ 1 2))")]
+        (is (and exc-data exc-cause-data
                  (= :err tag)
                  (= :process-form err-source)))
-        (let [error (read-string val)]
-          (is (int? (:clojure.error/column error)))
-          (is (int? (:clojure.error/line error)))
-          (is (= (:clojure.error/phase error) :macroexpand))
-          (is (= (:clojure.error/symbol error) 'clojure.core/defn)))))))
+        (let [exc-data-map (read-string exc-data)]
+          (is (int? (:clojure.error/column exc-data-map)))
+          (is (int? (:clojure.error/line exc-data-map)))
+          (is (= (:clojure.error/phase exc-data-map) :macroexpand))
+          (is (= (:clojure.error/symbol exc-data-map) 'clojure.core/defn)))
+
+        (let [exc-cause-map (binding [*default-data-reader-fn* repl/default-reptile-tag-reader]
+                              (read-string exc-cause-data))
+              problems (:clojure.spec.alpha/problems exc-cause-map)
+              spec (:clojure.spec.alpha/spec exc-cause-map)
+              value (:clojure.spec.alpha/value exc-cause-map)
+              args (:clojure.spec.alpha/args exc-cause-map)]
+          (is (= 2 (count problems)))
+          (is (= 2 (count (keys spec))))
+          (is (= '(x (+ 1 2)) value))
+          (is (= '(x (+ 1 2)) args)))))))
 
 (deftest ^:in-namespaces in-namespaces
   (testing "Testing the support and use of namespaces"
@@ -205,20 +216,20 @@
         (is (= "34" val)))
 
       ; TODO investigate ns support
-#_      (let [{:keys [val tag] :as x} (shared-eval "(in-ns 'repl-test)")]
-        (println "111 val" val "x" x)
-        (is (= :ret tag))
-        (is (str/ends-with? val "\"repl-test\"]"))
-        (is (str/starts-with? val "#object"))
-
-        (let [{:keys [val tag] :as x} (shared-eval "*ns*")]
+      #_(let [{:keys [val tag] :as x} (shared-eval "(in-ns 'repl-test)")]
+          (println "111 val" val "x" x)
           (is (= :ret tag))
           (is (str/ends-with? val "\"repl-test\"]"))
-          (is (str/starts-with? val "#object")))
+          (is (str/starts-with? val "#object"))
 
-        (let [{:keys [val tag] :as x} (shared-eval "(in-ns 'user)")]
-          (is (= :ret tag))
-          (is (str/ends-with? val "\"user\"]"))
-          (is (str/starts-with? val "#object")))))))
+          (let [{:keys [val tag] :as x} (shared-eval "*ns*")]
+            (is (= :ret tag))
+            (is (str/ends-with? val "\"repl-test\"]"))
+            (is (str/starts-with? val "#object")))
+
+          (let [{:keys [val tag] :as x} (shared-eval "(in-ns 'user)")]
+            (is (= :ret tag))
+            (is (str/ends-with? val "\"user\"]"))
+            (is (str/starts-with? val "#object")))))))
 
 
