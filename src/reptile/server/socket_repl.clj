@@ -1,11 +1,11 @@
 (ns reptile.server.socket-repl
-  (:require [clojure.java.io :as io]
-            [clojure.core.server :as clj-server]
-            [clojure.tools.reader.reader-types :as reader-types]
-            [clojure.tools.reader :as reader])
-  (:import (java.net Socket ServerSocket)
-           (java.io OutputStreamWriter)
-           (clojure.lang LineNumberingPushbackReader DynamicClassLoader)))
+  (:require
+    [clojure.java.io :as io]
+    [clojure.core.server :as clj-server])
+  (:import
+    (java.net Socket ServerSocket)
+    (java.io OutputStreamWriter StringReader PushbackReader)
+    (clojure.lang LineNumberingPushbackReader DynamicClassLoader)))
 
 (defn send-code
   [code-writer clj-code]
@@ -23,22 +23,37 @@
         server-writer (OutputStreamWriter. (io/output-stream client))]
     [server-reader server-writer]))
 
+(defn default-reptile-tag-reader
+  [tag val]
+  {:nk-tag tag :nk-val (read-string (str val))})
 
-; TODO use spec to verify the :reader / :writer keys are present on the passed repl
-(defn process-form
-  "Check the validity of the form and evaluate it using the given `repl`"
+(defn normalise-exception-data
+  [exc]
+  (let [exc-data       (ex-data exc)
+        exc-msg        (ex-message exc)
+        cause          (ex-cause exc)
+        exc-cause-data (ex-data cause)
+        exc-cause-msg  (ex-message cause)]
+    {:exc-data       (pr-str exc-data)
+     :exc-msg        exc-msg
+     :exc-cause-data (pr-str exc-cause-data)
+     :exc-cause-msg  exc-cause-msg}))
+
+(defn eval-form
+  "Evaluate it using the given `repl`"
   [repl form]
   (try
-    (let [eval-ok! (eval (read-string form))
-          edn-form (read-string form)]
-      (send-code (:writer repl) edn-form))
+
+    (send-code (:writer repl) form)
 
     (let [sentinel     ::eof
-          prepl-reader (partial reader/read {:eof sentinel} (:reader repl))]
+          reader-opts  {:eof sentinel :default default-reptile-tag-reader}
+          repl-reader  (:reader repl)
+          prepl-reader (partial read reader-opts repl-reader)]
       (loop [results [(prepl-reader)]]
         (cond
           (= sentinel (last results))
-          {:tag :err :form form :ms 0 :ns "user" :val "" :err-source :process-form-reader}
+          {:tag :err :form form :ms 0 :ns "user" :val "" :err-source :prepl-eof}
 
           (= :ret (:tag (last results)))
           results
@@ -46,44 +61,48 @@
           :else
           (recur (conj results (prepl-reader))))))
 
-    (catch Exception e {:tag  :err :err-source :process-form
-                        :form form :ms 0 :ns "user" :val (pr-str (.getCause e))})))
+    (catch Exception e
+      (let [exc-data (normalise-exception-data e)]
+        (merge exc-data
+               {:tag :err :form form :ms 0 :ns "user" :val "" :err-source :process-form})))))
 
 (defn read-forms
   "Read the string in the REPL buffer to obtain all forms (rather than just the first)"
   [repl-forms]
-  (let [pbr         (reader-types/string-push-back-reader repl-forms)
-        sentinel    ::eof
-        form-reader (partial reader/read {:eof sentinel} pbr)]
-    (try
+  (try
+    (let [pbr         (PushbackReader. (StringReader. repl-forms))
+          sentinel    ::eof
+          reader-opts {:eof sentinel :default default-reptile-tag-reader}
+          form-reader (partial read reader-opts pbr)]
       (loop [data-read (form-reader)
              result    []]
         (if (= data-read sentinel)
-          result
+          (if (empty? result)
+            {:tag :err :form repl-forms :ms 0 :ns "user" :ex-data true
+             :val (pr-str {:type :reader-exception, :ex-kind :eof}) :err-source :read-forms}
+            result)
           (recur (form-reader)
-                 (conj result (pr-str data-read)))))
-      (catch Exception _ []))))
+                 (conj result data-read)))))
+    (catch Exception e
+      (let [msg-data   (ex-data e)
+            msg-string (.getMessage e)]
+        {:tag :err :form repl-forms :ms 0 :ns "user" :ex-data (map? msg-data)
+         :val (if msg-data (pr-str msg-data) msg-string) :err-source :read-forms}))))
 
 (defn shared-eval
   "Evaluate the form(s) provided in the string `forms-str` using the given `repl`"
   [repl forms-str]
   (let [expanded-forms (read-forms forms-str)]
-    (if (empty? expanded-forms)
-      [{:tag :err :form forms-str :ms 0 :ns "user" :val "" :err-source :shared-eval}]
-      (flatten (map (partial process-form repl) expanded-forms)))))
-
-(defn reptile-valf
-  "The prepl default for :valf is `pr-str`, instead here we return values"
-  [& xs]
-  (first xs))
+    (if (map? expanded-forms)                               ; error map
+      [expanded-forms]
+      (flatten (map (partial eval-form repl) expanded-forms)))))
 
 (defn shared-prepl-server
   [opts]
   (let [socket-opts {:port          0
-                     :name          "Reptile server"
+                     :name          "REPtiLe server"
                      :server-daemon false
-                     :accept        'clojure.core.server/io-prepl
-                     :args          [:valf 'reptile.server.socket-repl/reptile-valf]}]
+                     :accept        'clojure.core.server/io-prepl}]
 
     ;; A clojure.lang.DynamicClassLoader is needed to enable interactive library addition
     (try
