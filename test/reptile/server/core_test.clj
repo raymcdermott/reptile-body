@@ -1,9 +1,10 @@
 (ns reptile.server.core-test
-  (:require [clojure.test :refer :all]
-            [clojure.string :as str]
-            [clojure.tools.reader :as reader]
-            [reptile.server.http :refer :all]
-            [reptile.server.socket-repl :as repl]))
+  (:require
+    [clojure.spec.alpha :as spec]
+    [clojure.test :refer :all]
+    [clojure.string :as str]
+    [reptile.server.http :refer :all]
+    [reptile.server.socket-repl :as repl]))
 
 ; use this as a fixture for each test?
 (defn evaller [& {:keys [comp-first?]
@@ -167,18 +168,6 @@
         (is (nil? (read-string (:val (first gen-ok)))))
         (is (int? (read-string (:val (last gen-ok)))))))))
 
-(defn normalise-exception-data
-  [exc]
-  (let [exc-data       (ex-data exc)
-        exc-msg        (ex-message exc)
-        cause          (ex-cause exc)
-        exc-cause-data (ex-data cause)
-        exc-cause-msg  (ex-message cause)]
-    {:exc-data       (pr-str exc-data)
-     :exc-msg        exc-msg
-     :exc-cause-data (pr-str exc-cause-data)
-     :exc-cause-msg  exc-cause-msg}))
-
 (deftest ^:graceful-fail-tests graceful-fail-tests
   (testing "Test graceful failures for syntax and spec errors"
     (let [shared-eval (evaller :comp-first? true)]
@@ -189,13 +178,14 @@
                  (= :read-forms err-source)))
         (is (= "EOF while reading" val)))
 
-      (let [{:keys [tag val] :as x} (shared-eval "(defn x (+ 1 2))")
-            {:keys [cause via trace data]} (binding [*default-data-reader-fn* repl/default-reptile-tag-reader]
-                                             (read-string val))
-            problems      (:clojure.spec.alpha/problems data)
-            spec          (:clojure.spec.alpha/spec data)
-            value         (:clojure.spec.alpha/value data)
-            args          (:clojure.spec.alpha/args data)]
+      (let [{:keys [tag val]} (shared-eval "(defn x (+ 1 2))")
+            {:keys [cause via trace data]}
+            (binding [*default-data-reader-fn* repl/default-reptile-tag-reader]
+              (read-string val))
+            problems (::spec/problems data)
+            spec     (::spec/spec data)
+            value    (::spec/value data)
+            args     (::spec/args data)]
 
         (is (= (:ret tag)))
 
@@ -212,16 +202,16 @@
     (let [shared-eval (evaller :comp-first? true)]
 
       ; Functions
-      (let [{:keys [val tag] :as x} (shared-eval "(defn ns-x2 [x] (+ x x))")]
+      (let [{:keys [val tag]} (shared-eval "(defn ns-x2 [x] (+ x x))")]
         (is (= :ret tag))
         (is (= val "#'user/ns-x2")))
 
-      (let [{:keys [val tag] :as x} (shared-eval "*ns*")]
+      (let [{:keys [val tag]} (shared-eval "*ns*")]
         (is (= :ret tag))
         (is (str/ends-with? val "\"user\"]"))
         (is (str/starts-with? val "#object")))
 
-      (let [{:keys [val] :as x} (shared-eval "(ns-x2 17)")]
+      (let [{:keys [val]} (shared-eval "(ns-x2 17)")]
         (is (= "34" val)))
 
       ; TODO investigate ns support

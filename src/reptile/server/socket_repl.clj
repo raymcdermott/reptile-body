@@ -27,18 +27,6 @@
   [tag val]
   {:nk-tag tag :nk-val (read-string (str val))})
 
-(defn normalise-exception-data
-  [exc]
-  (let [exc-data       (ex-data exc)
-        exc-msg        (ex-message exc)
-        cause          (ex-cause exc)
-        exc-cause-data (ex-data cause)
-        exc-cause-msg  (ex-message cause)]
-    {:exc-data       (pr-str exc-data)
-     :exc-msg        exc-msg
-     :exc-cause-data (pr-str exc-cause-data)
-     :exc-cause-msg  exc-cause-msg}))
-
 (defn eval-form
   "Evaluate it using the given `repl`"
   [repl form]
@@ -62,9 +50,7 @@
           (recur (conj results (prepl-reader))))))
 
     (catch Exception e
-      (let [exc-data (normalise-exception-data e)]
-        (merge exc-data
-               {:tag :err :form form :ms 0 :ns "user" :val "" :err-source :process-form})))))
+      {:tag :err :form form :ms 0 :ns "user" :val (pr-str e) :err-source :process-form})))
 
 (defn read-forms
   "Read the string in the REPL buffer to obtain all forms (rather than just the first)"
