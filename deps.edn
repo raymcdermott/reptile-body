@@ -1,4 +1,4 @@
-{:deps    {org.clojure/clojure          {:mvn/version "1.10.0-beta3"}
+{:deps    {org.clojure/clojure          {:mvn/version "1.10.0-beta4"}
            org.clojure/core.async       {:mvn/version "0.4.474"}
            org.clojure/tools.logging    {:mvn/version "0.4.0"}
            clojure-complete             {:mvn/version "0.2.4"}
@@ -17,7 +17,9 @@
                   :extra-deps  {com.cognitect/test-runner
                                 {:git/url "git@github.com:cognitect-labs/test-runner"
                                  :sha     "5f2b5c2efb444df76fb5252102b33f542ebf7f58"}}
-                  :main-opts   ["-m" "cognitect.test-runner"]}}}
+                  :main-opts   ["-m" "cognitect.test-runner"]}
+           :repl {:extra-deps {clojure-watch {:mvn/version "0.1.14"}}
+                  :main-opts ["-i" "@src/reptile/dev/reload_server.clj"]}}}
 
 
 

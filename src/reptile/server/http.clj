@@ -171,7 +171,6 @@
 
 (defn- start-web-server!
   [& [port]]
-  (stop-web-server!)
   (let [port         (or port 0)                            ; 0 => Choose any available port
         ring-handler (var main-ring-handler)
         [port stop-fn] (let [server (aleph/start-server ring-handler {:port port})
@@ -183,7 +182,7 @@
                             (deliver p nil))])
         uri          (format "http://localhost:%s/" port)]
 
-    (infof "Web server is running at `%s`" uri)
+    (infof "Web server URL is `%s`" uri)
     (reset! web-server_ stop-fn)))
 
 (defn- stop!
@@ -212,10 +211,10 @@
 
     (reset! shared-secret secret)
 
-    (try
-      ; Need DynamicClassLoader to support add-lib
-      (let [current-thread (Thread/currentThread)
-            cl             (.getContextClassLoader current-thread)]
-        (.setContextClassLoader current-thread (clojure.lang.DynamicClassLoader. cl))
-        (start! server-port))
-      (catch Exception e (str "ClassLoader issue - caught exception: " (.getMessage e))))))
+    ; Need DynamicClassLoader to support add-lib
+    (let [current-thread (Thread/currentThread)
+          cl             (.getContextClassLoader current-thread)]
+      (.setContextClassLoader current-thread (clojure.lang.DynamicClassLoader. cl))
+      (start! server-port))))
+
+(defonce stop-reptile-server stop!)
