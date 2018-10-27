@@ -19,7 +19,7 @@
                                  :sha     "028a6d41ac9ac5d5c405dfc38e4da6b4cc1255d5"}}
                   :main-opts   ["-m" "cognitect.test-runner"]}
            :repl {:extra-deps {clojure-watch {:mvn/version "0.1.14"}}
-                  :main-opts ["-i" "@src/reptile/dev/reload_server.clj"]}}}
+                  :main-opts ["-i" "@reptile/dev/server_boot.clj"]}}}
 
 
 

@@ -15,26 +15,20 @@
   (.getCanonicalPath (io/file path)))
 
 (defn boot-and-watch-fs!
-  [& [port]]
-  (letfn [(start-reptile [port]
-            (start-server (or port 56665) "warm-blooded-lizards-rock"))]
-    (start-watch [{:path        (absolute-path "src")
+  [path port secret]
+  (letfn [(start-reptile [reptile-port shared-secret]
+            (start-server reptile-port shared-secret))]
+    (start-watch [{:path        (absolute-path path)
                    :event-types [:create :modify :delete]
                    :bootstrap   (fn [path]
                                   (println "Starting to watch " path)
-                                  (start-reptile port))
+                                  (start-reptile port secret))
                    :callback    (fn [event filename]
-                                  (println event filename)
-                                  (load-file (absolute-path "src/reptile/server/http.clj"))
-                                  (http/stop-reptile-server)
-                                  (start-reptile port))
+                                  (when-not (.isDirectory (io/file filename))
+                                    (println event filename)
+                                    (println "REPL re-load" (absolute-path (str path "/reptile/server/http.clj")))
+                                    (load-file filename)
+                                    (load-file (absolute-path (str path "/reptile/server/http.clj")))
+                                    (http/stop-reptile-server)
+                                    (start-reptile port secret)))
                    :options     {:recursive true}}])))
-
-
-;------------------- ************* -------------------
-;
-; Start up when the namespace is loaded
-;
-;------------------- ************* -------------------
-
-(boot-and-watch-fs!)

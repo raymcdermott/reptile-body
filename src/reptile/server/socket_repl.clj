@@ -15,7 +15,7 @@
 
 ;; TODO ... poll server and enable reconnection
 (defn prepl-client
-  "Attaching the PREPL to a given `host` and `port`"
+  "Attaching PREPL to a given `host` and `port`"
   [host port]
   (let [host          (if (= :self host) "localhost" host)
         client        (Socket. ^String host ^Integer port)

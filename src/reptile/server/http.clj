@@ -79,7 +79,7 @@
   [{:keys [?data]}]
   (when-let [prepl (or @shared-repl (reset! shared-repl (repl/shared-prepl @repl-socket)))]
     (let [input-form (:form ?data)
-          response   {:prepl-response (repl/shared-eval prepl input-form)}]
+          response   {:prepl-response (repl/shared-eval prepl input-form) :live-repl true}]
 
       ;; Send the results to everyone
       (doseq [uid (:any @connected-uids)]
@@ -182,7 +182,7 @@
                             (deliver p nil))])
         uri          (format "http://localhost:%s/" port)]
 
-    (infof "Web server URL is `%s`" uri)
+    (infof "Web server on URL is `%s`" uri)
     (reset! web-server_ stop-fn)))
 
 (defn- stop!
