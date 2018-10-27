@@ -57,6 +57,9 @@
   (when ?reply-fn
     (?reply-fn {:unmatched-event-as-echoed-from-from-server event})))
 
+(defmethod ^:private -event-msg-handler :chsk/ws-ping
+  [_])                                                      ; do nothing
+
 (defmethod ^:private -event-msg-handler :example/toggle-broadcast
   [{:keys [?reply-fn]}]
   (let [loop-enabled? (swap! broadcast-enabled?_ not)]
