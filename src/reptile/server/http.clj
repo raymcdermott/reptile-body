@@ -12,6 +12,10 @@
             [complete.core :as completer]
             [reptile.server.socket-repl :as repl]))
 
+; TODO: move to a mesg per client model (not broadcast on uid)
+; TODO: then kill clients that don't ack
+
+
 ;; (timbre/set-level! :trace) ; Uncomment for more logging
 (reset! sente/debug-mode?_ false)                           ; Uncomment for extra debug info
 
@@ -57,9 +61,6 @@
   (when ?reply-fn
     (?reply-fn {:unmatched-event-as-echoed-from-from-server event})))
 
-(defmethod ^:private -event-msg-handler :chsk/ws-ping
-  [_])                                                      ; do nothing
-
 (defmethod ^:private -event-msg-handler :example/toggle-broadcast
   [{:keys [?reply-fn]}]
   (let [loop-enabled? (swap! broadcast-enabled?_ not)]
@@ -96,55 +97,83 @@
 ;;;;;;;;;;; LOGIN
 
 ;; The standard Sente approach uses Ring to authenticate but we want to use WS
-(def ^:private connected-users (atom {:editors     ["eric" "mia" "mike" "ray" "reid"]
-                                      :session-key "apropos"}))
-
-;; We can watch this atom for changes if we like
-(add-watch connected-uids :connected-uids
-           (fn [_ _ old new]
-             (when (not= old new)
-               (infof "Connected uids change: %s" new)
-               (infof "We are going to (un)map a REPL connection here"))))
+(def ^:private connected-users (atom {}))
 
 (add-watch connected-users :connected-users
            (fn [_ _ old new]
              (when (not= old new)
                (let [curr-users (get-in new [:reptile :clients])
                      prev-users (get-in old [:reptile :clients])]
-                 (println "Current users" curr-users)
-                 (println "Previous users" prev-users)
-                 (println "Connected UIDs" @connected-uids)
+                 (println "connected-users" curr-users)
                  (doseq [uid (:any @connected-uids)]
                    (chsk-send! uid [:fast-push/editors curr-users]))))))
 
-(defn- register-uid [state uid send-fn]
-  (assoc-in state [:clients uid :send-fn] (partial send-fn uid)))
+(defn- get-user-id
+  [state client-id]
+  (first (keep (fn [[id client]]
+                 (when (= (:client-id client) client-id) id))
+               (get-in state [:reptile :clients]))))
 
-(defn- register-user [state user client-id observer]
-  (let [kw-user (keyword user)]
-    (assoc-in state [:reptile :clients kw-user]
-              {:client-id client-id :observer observer})))
+(def ^:private socket-connections (atom {}))
 
-(defn- deregister-user [state user]
+(add-watch socket-connections :socket-connections
+           (fn [_ _ old new]
+             (when (not= old new)
+               (println "socket-connections" new))))
+
+(defn- register-socket [state client-id]
+  (let [kw-client (keyword client-id)]
+    (assoc state kw-client {})))
+
+(defn- register-socket-user [state user client-id]
+  (let [kw-client (keyword client-id)]
+    (assoc state kw-client {:user user})))
+
+(defn- deregister-socket [state client-id]
+  (let [kw-client (keyword client-id)]
+    (dissoc state kw-client)))
+
+(defn- register-user [state user client-id]
   (let [kw-user (keyword user)]
-    (update-in state [:reptile :clients] dissoc kw-user)))
+    (assoc-in state [:reptile :clients kw-user] {:client-id client-id})))
+
+(defn- deregister-user [state client-id]
+  (let [user (get-user-id state client-id)]
+    (update-in state [:reptile :clients] dissoc user)))
+
+; the dropping thing needs to be re-thought, maybe via core.async timeouts
+(defn- register-socket-ping [state client-id]
+  (let [kw-client (keyword client-id)]
+    (assoc-in state [kw-client :ping] (System/currentTimeMillis))))
+
+(defmethod ^:private -event-msg-handler :chsk/uidport-open
+  [{:keys [client-id]}]
+  (swap! socket-connections register-socket client-id))
+
+(defmethod ^:private -event-msg-handler :chsk/uidport-close
+  [{:keys [client-id]}]
+  (swap! socket-connections deregister-socket client-id)
+  (swap! connected-users deregister-user client-id))
+
+(defmethod ^:private -event-msg-handler :chsk/ws-ping
+  [{:keys [client-id]}]
+  ; maybe we kill if no ping too
+  (swap! socket-connections register-socket-ping client-id))
+
 
 (def ^:private shared-secret (atom nil))
 
 (defn- auth [{:keys [client-id ?data ?reply-fn state]}]
-  (let [{:keys [user secret observer]} ?data
-        editor? (= "false" observer)]
+  (let [{:keys [user secret]} ?data]
     (cond
-      (and editor? (= secret @shared-secret))
-      (do (swap! state register-user user client-id observer)
+      (= secret @shared-secret)
+      (do (swap! state register-user user client-id)
+          (swap! socket-connections register-socket-user user client-id)
           (?reply-fn :login-ok))
-
-      editor?
-      (?reply-fn :login-failed)
 
       :else
       (do
-        (swap! state register-user user client-id observer)
+        (swap! state register-user user client-id)
         (?reply-fn :login-ok)))))
 
 (defmethod ^:private -event-msg-handler :reptile/login
@@ -166,7 +195,7 @@
 
 ;;;; Init stuff
 
-(defonce ^:private web-server_ (atom nil))                  ; (fn stop [])
+(defonce ^:private web-server_ (atom nil))
 
 (defn- stop-web-server!
   []
@@ -188,13 +217,15 @@
     (infof "Web server on URL is `%s`" uri)
     (reset! web-server_ stop-fn)))
 
-(defn- stop!
+(defn stop!
   []
+  (println "Stopping")
   (stop-router!)
   (stop-web-server!))
 
 (defn- start!
   [port]
+  (println "Starting")
   (start-router!)
   (start-web-server! port))
 
@@ -219,5 +250,3 @@
           cl             (.getContextClassLoader current-thread)]
       (.setContextClassLoader current-thread (clojure.lang.DynamicClassLoader. cl))
       (start! server-port))))
-
-(defonce stop-reptile-server stop!)
