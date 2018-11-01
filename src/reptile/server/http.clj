@@ -170,9 +170,7 @@
           (?reply-fn :login-ok))
 
       :else
-      (do
-        (swap! state register-user user client-id)
-        (?reply-fn :login-ok)))))
+      (?reply-fn :login-failed))))
 
 (defmethod ^:private -event-msg-handler :reptile/login
   [ev-msg]
