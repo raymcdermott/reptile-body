@@ -18,9 +18,8 @@
                                     :sha     "028a6d41ac9ac5d5c405dfc38e4da6b4cc1255d5"}}
                      :main-opts   ["-m" "cognitect.test-runner"]}
            :repl    {:extra-paths ["dev"]
-                     :extra-deps {clojure-watch               {:mvn/version "0.1.14"}
-                                  org.clojure/tools.namespace {:mvn/version "0.2.11"}}
-                     :main-opts  ["-i" "@reptile/server_boot.clj" "-r"]}
+                     :extra-deps  {clojure-watch {:mvn/version "0.1.14"}}
+                     :main-opts   ["-i" "@reptile/server_boot.clj" "-r"]}
            :cursive {:main-opts ["-r"]}}}
 
 

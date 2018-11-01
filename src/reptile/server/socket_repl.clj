@@ -100,7 +100,7 @@
 
         (.getLocalPort ^ServerSocket server))
 
-      (catch Exception e (println (str "shared-prepl-server - exception: " (.getMessage e)))))))
+      (catch Exception e (println (str "shared-prepl-server - exception: " (ex-data e)))))))
 
 
 (defn shared-prepl

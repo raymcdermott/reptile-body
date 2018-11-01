@@ -74,16 +74,15 @@
     (doseq [uid (:any @connected-uids)]
       (chsk-send! uid [:fast-push/keystrokes shared-data]))))
 
-
 ;; TODO prove this idea: we can update this, and then via a watcher - switch to another app dynamically
-(def ^:private repl-socket (atom nil))
-(def ^:private shared-repl (atom nil))
+(defonce ^:private repl-socket (atom nil))
+(defonce ^:private shared-repl (atom nil))
 
 (defmethod ^:private -event-msg-handler :reptile/repl
   [{:keys [?data]}]
   (when-let [prepl (or @shared-repl (reset! shared-repl (repl/shared-prepl @repl-socket)))]
     (let [input-form (:form ?data)
-          response   {:prepl-response (repl/shared-eval prepl input-form) :live-repl true}]
+          response   {:prepl-response (repl/shared-eval prepl input-form)}]
 
       ;; Send the results to everyone
       (doseq [uid (:any @connected-uids)]
@@ -97,13 +96,12 @@
 ;;;;;;;;;;; LOGIN
 
 ;; The standard Sente approach uses Ring to authenticate but we want to use WS
-(def ^:private connected-users (atom {}))
+(defonce ^:private connected-users (atom {}))
 
 (add-watch connected-users :connected-users
            (fn [_ _ old new]
              (when (not= old new)
-               (let [curr-users (get-in new [:reptile :clients])
-                     prev-users (get-in old [:reptile :clients])]
+               (let [curr-users (get-in new [:reptile :clients])]
                  (println "connected-users" curr-users)
                  (doseq [uid (:any @connected-uids)]
                    (chsk-send! uid [:fast-push/editors curr-users]))))))
@@ -114,9 +112,9 @@
                  (when (= (:client-id client) client-id) id))
                (get-in state [:reptile :clients]))))
 
-(def ^:private socket-connections (atom {}))
+(defonce ^:private socket-connections (atom {}))
 
-(add-watch socket-connections :socket-connections
+#_(add-watch socket-connections :socket-connections
            (fn [_ _ old new]
              (when (not= old new)
                (println "socket-connections" new))))
@@ -161,7 +159,7 @@
   (swap! socket-connections register-socket-ping client-id))
 
 
-(def ^:private shared-secret (atom nil))
+(defonce ^:private shared-secret (atom nil))
 
 (defn- auth [{:keys [client-id ?data ?reply-fn state]}]
   (let [{:keys [user secret]} ?data]
@@ -219,13 +217,11 @@
 
 (defn stop!
   []
-  (println "Stopping")
   (stop-router!)
   (stop-web-server!))
 
 (defn- start!
   [port]
-  (println "Starting")
   (start-router!)
   (start-web-server! port))
 
@@ -234,11 +230,10 @@
   (let [{:keys [server-port secret]}
         (if (= (count args) 4)
           (let [port        (Integer/parseInt reptile-port)
-                secret      reptile-secret
                 socket-host (first args)
                 socket-port (last args)]
             (reset! repl-socket {:host socket-host :port socket-port})
-            {:server-port port :secret secret})
+            {:server-port port :secret reptile-secret})
           (do
             (reset! repl-socket {:host :self :port 0})
             {:server-port reptile-port :secret reptile-secret}))]
@@ -249,4 +244,9 @@
     (let [current-thread (Thread/currentThread)
           cl             (.getContextClassLoader current-thread)]
       (.setContextClassLoader current-thread (clojure.lang.DynamicClassLoader. cl))
-      (start! server-port))))
+      (start! server-port))
+
+    ;; Return all material needed to restart the app
+    ;{:server-port server-port :secret secret :repl-socket @repl-socket}
+
+    ))
