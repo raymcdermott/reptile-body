@@ -115,9 +115,9 @@
 (defonce ^:private socket-connections (atom {}))
 
 #_(add-watch socket-connections :socket-connections
-           (fn [_ _ old new]
-             (when (not= old new)
-               (println "socket-connections" new))))
+             (fn [_ _ old new]
+               (when (not= old new)
+                 (println "socket-connections" new))))
 
 (defn- register-socket [state client-id]
   (let [kw-client (keyword client-id)]
@@ -161,6 +161,10 @@
 
 (defonce ^:private shared-secret (atom nil))
 
+(defn- logout [{:keys [client-id _ state]}]
+  (swap! state deregister-user client-id)
+  (swap! socket-connections deregister-socket client-id))
+
 (defn- auth [{:keys [client-id ?data ?reply-fn state]}]
   (let [{:keys [user secret]} ?data]
     (cond
@@ -175,6 +179,10 @@
 (defmethod ^:private -event-msg-handler :reptile/login
   [ev-msg]
   (auth (assoc ev-msg :state connected-users)))
+
+(defmethod ^:private -event-msg-handler :reptile/logout
+  [ev-msg]
+  (logout (assoc ev-msg :state connected-users)))
 
 ;;;; Sente event router (our `event-msg-handler` loop)
 
