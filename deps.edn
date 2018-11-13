@@ -1,12 +1,13 @@
-{:deps    {org.clojure/clojure          {:mvn/version "1.10.0-beta4"}
+{:deps    {org.clojure/clojure          {:mvn/version "1.10.0-beta5"}
            org.clojure/core.async       {:mvn/version "0.4.474"}
+           org.clojure/data.json        {:mvn/version "0.2.6"}
            org.clojure/tools.logging    {:mvn/version "0.4.0"}
            org.clojure/tools.deps.alpha {:git/url "https://github.com/clojure/tools.deps.alpha.git"
                                          :sha     "d492e97259c013ba401c5238842cd3445839d020"}
            clojure-complete             {:mvn/version "0.2.4"}
-           aleph                        {:mvn/version "0.4.4"}
+           aleph                        {:mvn/version "0.4.6"}
            gloss                        {:mvn/version "0.2.6"}
-           compojure                    {:mvn/version "1.6.0"}
+           compojure                    {:mvn/version "1.6.1"}
            com.taoensso/sente           {:mvn/version "1.12.0"}
            com.taoensso/timbre          {:mvn/version "4.10.0"}
            ring                         {:mvn/version "1.6.3"}
