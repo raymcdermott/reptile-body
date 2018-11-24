@@ -1,9 +1,9 @@
-{:deps    {org.clojure/clojure          {:mvn/version "1.10.0-beta4"}
+{:deps    {org.clojure/clojure          {:mvn/version "1.10.0-beta8"}
            org.clojure/core.async       {:mvn/version "0.4.474"}
            org.clojure/tools.logging    {:mvn/version "0.4.0"}
            org.clojure/tools.deps.alpha {:git/url "https://github.com/clojure/tools.deps.alpha.git"
                                          :sha     "d492e97259c013ba401c5238842cd3445839d020"}
-           clojure-complete             {:mvn/version "0.2.4"}
+           compliment                   {:mvn/version "0.3.6"}
            aleph                        {:mvn/version "0.4.4"}
            gloss                        {:mvn/version "0.2.6"}
            compojure                    {:mvn/version "1.6.0"}
