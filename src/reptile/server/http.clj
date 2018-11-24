@@ -9,8 +9,8 @@
             [taoensso.sente.server-adapters.aleph :refer [get-sch-adapter]]
             [taoensso.sente.packers.transit :as sente-transit]
             [taoensso.sente :as sente]
-            [complete.core :as completer]
-            [reptile.server.socket-repl :as repl]))
+            [reptile.server.socket-repl :as repl]
+            [reptile.server.completion :as completion]))
 
 ; TODO: move to a mesg per client model (not broadcast on uid)
 ; TODO: then kill clients that don't ack
@@ -70,7 +70,9 @@
 (defmethod ^:private -event-msg-handler :reptile/keystrokes
   ;; Send the keystrokes to one and all
   [{:keys [?data]}]
-  (let [shared-data {:form (:form ?data) :user (:user-name ?data)}]
+  (let [{:keys [form to-complete user-name]} ?data
+        completions (completion/code-completions to-complete form)
+        shared-data {:form form :user user-name :completions completions}]
     (doseq [uid (:any @connected-uids)]
       (chsk-send! uid [:fast-push/keystrokes shared-data]))))
 
