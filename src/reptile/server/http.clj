@@ -70,9 +70,17 @@
 (defmethod ^:private -event-msg-handler :reptile/keystrokes
   ;; Send the keystrokes to one and all
   [{:keys [?data]}]
-  (let [{:keys [form to-complete user-name]} ?data
-        completions (completion/code-completions to-complete form)
+  (let [{:keys [form prefixed-form to-complete user-name]} ?data
+        completions (completion/code-completions to-complete prefixed-form)
         shared-data {:form form :user user-name :completions completions}]
+    (doseq [uid (:any @connected-uids)]
+      (chsk-send! uid [:fast-push/keystrokes shared-data]))))
+
+#_(defmethod ^:private -event-msg-handler :reptile/doc-hint
+  [{:keys [?data]}]
+  (let [{:keys [doc-ns doc-symbol]} ?data
+        doc (completion/code-documentation doc-ns doc-symbol)
+        shared-data {:user user-name :?????? completions}]
     (doseq [uid (:any @connected-uids)]
       (chsk-send! uid [:fast-push/keystrokes shared-data]))))
 
@@ -85,7 +93,6 @@
   (when-let [prepl (or @shared-repl (reset! shared-repl (repl/shared-prepl @repl-socket)))]
     (let [input-form (:form ?data)
           response   {:prepl-response (repl/shared-eval prepl input-form)}]
-
       ;; Send the results to everyone
       (doseq [uid (:any @connected-uids)]
         (chsk-send! uid [:fast-push/eval (merge ?data response)])))))
