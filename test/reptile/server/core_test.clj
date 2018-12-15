@@ -172,6 +172,12 @@
   (testing "Test graceful failures for syntax and spec errors"
     (let [shared-eval (evaller :comp-first? true)]
 
+      (let [{:keys [err-source ex-data tag val]} (shared-eval "(prn \"000")]
+        (is (and (false? ex-data)
+                 (= :err tag)
+                 (= :read-forms err-source)))
+        (is (= "EOF while reading string" val)))
+
       (let [{:keys [err-source ex-data tag val]} (shared-eval "(")]
         (is (and (false? ex-data)
                  (= :err tag)
@@ -179,7 +185,7 @@
         (is (= "EOF while reading" val)))
 
       (let [{:keys [tag val]} (shared-eval "(defn x (+ 1 2))")
-            {:keys [cause via trace data]}
+            {:keys [cause via trace data phase]}
             (binding [*default-data-reader-fn* repl/default-reptile-tag-reader]
               (read-string val))
             problems (::spec/problems data)
@@ -187,8 +193,8 @@
             value    (::spec/value data)
             args     (::spec/args data)]
 
-        (is (= (:ret tag)))
-
+        (is (= :ret tag))
+        (is (= :macro-syntax-check phase))
         (is (= cause "Call to clojure.core/defn did not conform to spec."))
         (is (= 2 (count (filter :message via))))
         (is (and (vector? trace) (> (count trace) 10)))

@@ -102,7 +102,6 @@
 
       (catch Exception e (println (str "shared-prepl-server - exception: " (ex-data e)))))))
 
-
 (defn shared-prepl
   [{:keys [host port] :as prepl-opts}]
 
