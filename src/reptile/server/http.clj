@@ -2,6 +2,7 @@
   (:require [ring.middleware.defaults]
             [compojure.core :refer [defroutes GET POST]]
             [compojure.route :as route]
+            [clojure.set :refer [map-invert]]
             [clojure.core.async :refer [<! <!! >! >!! put! chan go go-loop]]
             [aleph.http :as aleph]
             [taoensso.encore :refer [have have?]]
@@ -73,16 +74,15 @@
   (let [{:keys [form prefixed-form to-complete user-name]} ?data
         completions (completion/code-completions to-complete prefixed-form)
         shared-data {:form form :user user-name :completions completions}]
-    (doseq [uid (:any @connected-uids)]
-      (chsk-send! uid [:fast-push/keystrokes shared-data]))))
+    (chsk-send! :sente/all-users-without-uid [:fast-push/keystrokes shared-data])))
 
 #_(defmethod ^:private -event-msg-handler :reptile/doc-hint
-  [{:keys [?data]}]
-  (let [{:keys [doc-ns doc-symbol]} ?data
-        doc (completion/code-documentation doc-ns doc-symbol)
-        shared-data {:user user-name :?????? completions}]
-    (doseq [uid (:any @connected-uids)]
-      (chsk-send! uid [:fast-push/keystrokes shared-data]))))
+    [{:keys [?data]}]
+    (let [{:keys [doc-ns doc-symbol]} ?data
+          doc         (completion/code-documentation doc-ns doc-symbol)
+          shared-data {:user user-name :?????? completions}]
+      (doseq [uid (:any @connected-uids)]
+        (chsk-send! uid [:fast-push/keystrokes shared-data]))))
 
 ;; TODO prove this idea: we can update this, and then via a watcher - switch to another app dynamically
 (defonce ^:private repl-socket (atom nil))
@@ -94,8 +94,7 @@
     (let [input-form (:form ?data)
           response   {:prepl-response (repl/shared-eval prepl input-form)}]
       ;; Send the results to everyone
-      (doseq [uid (:any @connected-uids)]
-        (chsk-send! uid [:fast-push/eval (merge ?data response)])))))
+      (chsk-send! :sente/all-users-without-uid [:fast-push/eval (merge ?data response)]))))
 
 (defn- shutdown-repl
   [repl]
@@ -111,30 +110,33 @@
            (fn [_ _ old new]
              (when (not= old new)
                (let [curr-users (get-in new [:reptile :clients])]
-                 (println "connected-users" curr-users)
-                 (doseq [uid (:any @connected-uids)]
-                   (chsk-send! uid [:fast-push/editors curr-users]))))))
+                 (println :connected-users :state curr-users)
+                 (chsk-send! :sente/all-users-without-uid [:fast-push/editors curr-users])))))
 
 (defn- get-user-id
   [state client-id]
+  (let [inverted (map-invert state)]
+    (println :get-user-id :state state)
+    (println :get-user-id :inverted-state inverted))
+
   (first (keep (fn [[id client]]
                  (when (= (:client-id client) client-id) id))
                (get-in state [:reptile :clients]))))
 
 (defonce ^:private socket-connections (atom {}))
 
-#_(add-watch socket-connections :socket-connections
-             (fn [_ _ old new]
-               (when (not= old new)
-                 (println "socket-connections" new))))
+(add-watch socket-connections :socket-connections
+           (fn [_ _ old new]
+             (when (not= old new)
+               (println "socket-connections" new))))
 
 (defn- register-socket [state client-id]
   (let [kw-client (keyword client-id)]
     (assoc state kw-client {})))
 
-(defn- register-socket-user [state user client-id]
+(defn- register-socket-user [state user client-id reply-fn]
   (let [kw-client (keyword client-id)]
-    (assoc state kw-client {:user user})))
+    (assoc state kw-client {:user user :reply-fn reply-fn})))
 
 (defn- deregister-socket [state client-id]
   (let [kw-client (keyword client-id)]
@@ -142,7 +144,8 @@
 
 (defn- register-user [state user client-id]
   (let [kw-user (keyword user)]
-    (assoc-in state [:reptile :clients kw-user] {:client-id client-id})))
+    (assoc-in state [:reptile :clients kw-user]
+              {:client-id client-id})))
 
 (defn- deregister-user [state client-id]
   (let [user (get-user-id state client-id)]
@@ -179,7 +182,7 @@
     (cond
       (= secret @shared-secret)
       (do (swap! state register-user user client-id)
-          (swap! socket-connections register-socket-user user client-id)
+          (swap! socket-connections register-socket-user user client-id ?reply-fn)
           (?reply-fn :login-ok))
 
       :else
