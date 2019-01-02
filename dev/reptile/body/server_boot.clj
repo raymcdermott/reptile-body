@@ -1,5 +1,5 @@
-(ns reptile.server-boot
-  (:use [reptile.reload-server]))
+(ns reptile.body.server-boot
+  (:use [reptile.body.reload-server]))
 
 
 ;------------------- ************* -------------------

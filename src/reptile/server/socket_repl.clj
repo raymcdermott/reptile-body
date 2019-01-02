@@ -112,8 +112,6 @@
     {:reader prepl-reader :writer prepl-writer}))
 
 
-;; hook web sockets in
-
 ;; then hook core.async
 
 ;; then make things nice
